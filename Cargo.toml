@@ -4,7 +4,7 @@ version = "0.1.11"
 edition = "2021"
 license = "MIT"
 description = "A simple, zero-allocation, streaming, async multipart reader & writer for Rust"
-repository = "https://www.github.com/feliwir/multipart-rs"
+repository = "https://github.com/feliwir/multipart-rs"
 keywords = ["multipart", "http", "async", "streaming", "zero-allocation"]
 categories = ["web-programming", "asynchronous", "network-programming"]
 
