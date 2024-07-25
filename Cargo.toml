@@ -1,6 +1,6 @@
 [package]
 name = "multipart-rs"
-version = "0.1.10"
+version = "0.1.11"
 edition = "2021"
 license = "MIT"
 description = "A simple, zero-allocation, streaming, async multipart reader & writer for Rust"
@@ -17,6 +17,9 @@ futures-util = "0.3.30"
 memchr = "2.7.1"
 mime = "0.3.17"
 uuid = { version = "1.10.0", features = ["v4"] }
+
+[profile.dev]
+opt-level = 1
 
 [dev-dependencies]
 futures-test = "0.3.30"

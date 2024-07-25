@@ -1,7 +1,6 @@
 use std::{
     error::Error,
     fmt::{Display, Formatter, Result},
-    ops::Mul,
 };
 
 #[derive(Debug)]
