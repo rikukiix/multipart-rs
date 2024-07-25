@@ -10,7 +10,7 @@ pub struct MultipartWriter {
 impl MultipartWriter {
     pub fn new() -> MultipartWriter {
         MultipartWriter {
-            boundary: format!("boundary-{}", Uuid::new_v4()),
+            boundary: format!("{}", Uuid::new_v4()),
             first: true,
             data: Vec::new(),
         }
@@ -32,6 +32,9 @@ impl MultipartWriter {
         if !self.first {
             writer.write_all(b"\r\n").unwrap();
         }
+
+        // set first to false
+        self.first = false;
 
         writer.write_all(b"--").unwrap();
         writer.write_all(self.boundary.as_bytes()).unwrap();
