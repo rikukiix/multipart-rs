@@ -33,6 +33,47 @@ pub struct MultipartItem {
     pub data: BytesMut,
 }
 
+impl MultipartItem {
+    pub fn get_mime_type(&self) -> Result<mime::Mime, MultipartError> {
+        let content_type = self
+            .headers
+            .iter()
+            .find(|(key, _)| key.to_lowercase() == "content-type");
+
+        if content_type.is_none() {
+            return Err(MultipartError::InvalidContentType);
+        }
+
+        let ct = content_type
+            .unwrap()
+            .1
+            .parse::<mime::Mime>()
+            .map_err(|_e| MultipartError::InvalidContentType)?;
+
+        Ok(ct)
+    }
+
+    pub fn get_file_name(&self) -> Option<String> {
+        let content_disposition = self
+            .headers
+            .iter()
+            .find(|(key, _)| key.to_lowercase() == "content-disposition");
+
+        if content_disposition.is_none() {
+            return None;
+        }
+
+        let cd = &content_disposition.unwrap().1;
+        let parts: Vec<&str> = cd.split(";").collect();
+        let filename = parts
+            .iter()
+            .find(|p| p.trim().starts_with("filename="))
+            .map(|p| p.trim().split("=").collect::<Vec<&str>>()[1].to_string());
+
+        filename
+    }
+}
+
 pub struct MultipartReader<'a, E> {
     pub boundary: String,
     pub multipart_type: MultipartType,
