@@ -5,7 +5,7 @@ use std::{
 };
 
 use bytes::{Buf, Bytes, BytesMut};
-use futures_core::{stream::LocalBoxStream, Stream};
+use futures_core::{stream::BoxStream, Stream};
 use futures_util::StreamExt;
 
 use crate::{error::MultipartError, multipart_type::MultipartType};
@@ -57,13 +57,9 @@ impl MultipartItem {
         let content_disposition = self
             .headers
             .iter()
-            .find(|(key, _)| key.to_lowercase() == "content-disposition");
+            .find(|(key, _)| key.to_lowercase() == "content-disposition")?;
 
-        if content_disposition.is_none() {
-            return None;
-        }
-
-        let cd = &content_disposition.unwrap().1;
+        let cd = &content_disposition.1;
         let parts: Vec<&str> = cd.split(";").collect();
         let filename = parts
             .iter()
@@ -79,7 +75,7 @@ pub struct MultipartReader<'a, E> {
     pub multipart_type: MultipartType,
     /// Inner state
     state: InnerState,
-    stream: LocalBoxStream<'a, Result<Bytes, E>>,
+    stream: BoxStream<'a, Result<Bytes, E>>,
     buf: BytesMut,
     pending_item: Option<MultipartItem>,
 }
@@ -91,10 +87,10 @@ impl<'a, E> MultipartReader<'a, E> {
         multipart_type: MultipartType,
     ) -> Result<MultipartReader<'a, E>, MultipartError>
     where
-        S: Stream<Item = Result<Bytes, E>> + 'a,
+        S: Stream<Item = Result<Bytes, E>> + 'a + Send,
     {
         Ok(MultipartReader {
-            stream: stream.boxed_local(),
+            stream: stream.boxed(),
             boundary: boundary.to_string(),
             multipart_type: multipart_type,
             state: InnerState::FirstBoundary,
@@ -109,7 +105,7 @@ impl<'a, E> MultipartReader<'a, E> {
         multipart_type: MultipartType,
     ) -> Result<MultipartReader<'a, E>, MultipartError>
     where
-        E: std::error::Error + 'a,
+        E: std::error::Error + 'a + Send,
     {
         let stream = futures_util::stream::iter(vec![Ok(Bytes::copy_from_slice(data))]);
         MultipartReader::from_stream_with_boundary_and_type(stream, boundary, multipart_type)
@@ -117,10 +113,10 @@ impl<'a, E> MultipartReader<'a, E> {
 
     pub fn from_stream_with_headers<S>(
         stream: S,
-        headers: &Vec<(String, String)>,
+        headers: &[(String, String)],
     ) -> Result<MultipartReader<'a, E>, MultipartError>
     where
-        S: Stream<Item = Result<Bytes, E>> + 'a,
+        S: Stream<Item = Result<Bytes, E>> + 'a + Send,
         E: std::error::Error,
     {
         // Search for the content-type header
@@ -152,7 +148,7 @@ impl<'a, E> MultipartReader<'a, E> {
             .map_err(|_| MultipartError::InvalidMultipartType)?;
 
         Ok(MultipartReader {
-            stream: stream.boxed_local(),
+            stream: stream.boxed(),
             boundary: boundary.to_string(),
             multipart_type: multipart_type,
             state: InnerState::FirstBoundary,
@@ -166,19 +162,19 @@ impl<'a, E> MultipartReader<'a, E> {
         headers: &Vec<(String, String)>,
     ) -> Result<MultipartReader<'a, E>, MultipartError>
     where
-        E: std::error::Error + 'a,
+        E: std::error::Error + 'a + Send,
     {
         let stream = futures_util::stream::iter(vec![Ok(Bytes::copy_from_slice(data))]);
         MultipartReader::from_stream_with_headers(stream, headers)
     }
 
-    fn is_final_boundary(self: &Self, data: &[u8]) -> bool {
+    fn is_final_boundary(&self, data: &[u8]) -> bool {
         let boundary = format!("--{}--", self.boundary);
         data.starts_with(boundary.as_bytes())
     }
 
     // TODO: make this RFC compliant
-    fn is_boundary(self: &Self, data: &[u8]) -> bool {
+    fn is_boundary(&self, data: &[u8]) -> bool {
         let boundary = format!("--{}", self.boundary);
         data.starts_with(boundary.as_bytes())
     }

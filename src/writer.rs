@@ -24,7 +24,7 @@ impl MultipartWriter {
         }
     }
 
-    pub fn add(self: &mut Self, mut reader: impl Read, headers: &str) -> io::Result<u64> {
+    pub fn add(mut self, mut reader: impl Read, headers: &str) -> io::Result<u64> {
         // writer for our buffer
         let mut writer = std::io::BufWriter::new(&mut self.data);
 
@@ -51,7 +51,7 @@ impl MultipartWriter {
         io::copy(&mut reader, &mut writer)
     }
 
-    pub fn finish(self: &mut Self) {
+    pub fn finish(mut self) {
         // writer for our buffer
         let mut writer = std::io::BufWriter::new(&mut self.data);
 
