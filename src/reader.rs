@@ -7,6 +7,7 @@ use std::{
 use bytes::{Buf, Bytes, BytesMut};
 use futures_core::{stream::BoxStream, Stream};
 use futures_util::StreamExt;
+use mediatype::{MediaType, ReadParams};
 
 use crate::{error::MultipartError, multipart_type::MultipartType};
 
@@ -34,7 +35,7 @@ pub struct MultipartItem {
 }
 
 impl MultipartItem {
-    pub fn get_mime_type(&self) -> Result<mime::Mime, MultipartError> {
+    pub fn get_mime_type(&self) -> Result<MediaType, MultipartError> {
         let content_type = self
             .headers
             .iter()
@@ -44,11 +45,8 @@ impl MultipartItem {
             return Err(MultipartError::InvalidContentType);
         }
 
-        let ct = content_type
-            .unwrap()
-            .1
-            .parse::<mime::Mime>()
-            .map_err(|_e| MultipartError::InvalidContentType)?;
+        let ct = MediaType::parse(content_type.unwrap().1.as_str())
+            .map_err(MultipartError::ContentTypeParsingError)?;
 
         Ok(ct)
     }
@@ -92,7 +90,7 @@ impl<'a, E> MultipartReader<'a, E> {
         Ok(MultipartReader {
             stream: stream.boxed(),
             boundary: boundary.to_string(),
-            multipart_type: multipart_type,
+            multipart_type,
             state: InnerState::FirstBoundary,
             pending_item: None,
             buf: BytesMut::new(),
@@ -127,22 +125,19 @@ impl<'a, E> MultipartReader<'a, E> {
         if content_type.is_none() {
             return Err(MultipartError::NoContentType);
         }
+        let ct = MediaType::parse(content_type.unwrap().1.as_str())
+            .map_err(MultipartError::ContentTypeParsingError)?;
 
-        let ct = content_type
-            .unwrap()
-            .1
-            .parse::<mime::Mime>()
-            .map_err(|_e| MultipartError::InvalidContentType)?;
         let boundary = ct
-            .get_param(mime::BOUNDARY)
+            .get_param(mediatype::names::BOUNDARY)
             .ok_or(MultipartError::InvalidBoundary)?;
 
-        if ct.type_() != mime::MULTIPART {
+        if ct.ty != mediatype::names::MULTIPART {
             return Err(MultipartError::InvalidContentType);
         }
 
         let multipart_type = ct
-            .subtype()
+            .subty
             .as_str()
             .parse::<MultipartType>()
             .map_err(|_| MultipartError::InvalidMultipartType)?;
@@ -150,7 +145,7 @@ impl<'a, E> MultipartReader<'a, E> {
         Ok(MultipartReader {
             stream: stream.boxed(),
             boundary: boundary.to_string(),
-            multipart_type: multipart_type,
+            multipart_type,
             state: InnerState::FirstBoundary,
             pending_item: None,
             buf: BytesMut::new(),
@@ -159,7 +154,7 @@ impl<'a, E> MultipartReader<'a, E> {
 
     pub fn from_data_with_headers(
         data: &[u8],
-        headers: &Vec<(String, String)>,
+        headers: &[(String, String)],
     ) -> Result<MultipartReader<'a, E>, MultipartError>
     where
         E: std::error::Error + 'a + Send,
@@ -345,6 +340,56 @@ Content-Type: text/html\r
         let mut reader =
             MultipartReader::<std::io::Error>::from_data_with_headers(data, &headermap).unwrap();
         assert_eq!(reader.multipart_type, MultipartType::FormData);
+        let mut items = vec![];
+
+        loop {
+            match reader.next().await {
+                Some(Ok(item)) => items.push(item),
+                None => break,
+                Some(Err(e)) => panic!("Error: {:?}", e),
+            }
+        }
+
+        assert_eq!(items.len(), 3);
+    }
+
+    #[futures_test::test]
+    async fn valid_request_extra_type() {
+        let headermap = vec![(
+            "Content-Type".to_string(),
+            "multipart/related; type=\"application/dicom\"; boundary=974767299852498929531610575"
+                .to_string(),
+        )];
+        // Lines must end with CRLF
+        let data = b"--974767299852498929531610575\r
+Content-Disposition: form-data; name=\"text\"\r
+\r
+text default\r
+--974767299852498929531610575\r
+Content-Disposition: form-data; name=\"file1\"; filename=\"a.txt\"\r
+Content-Type: text/plain\r
+\r
+Content of a.txt.\r
+\r\n--974767299852498929531610575\r
+Content-Disposition: form-data; name=\"file2\"; filename=\"a.html\"\r
+Content-Type: text/html\r
+\r
+<!DOCTYPE html><title>Content of a.html.</title>\r
+\r
+--974767299852498929531610575--\r\n";
+
+        MultipartReader::<std::io::Error>::from_data_with_headers(data, &headermap).unwrap();
+        MultipartReader::<std::io::Error>::from_data_with_boundary_and_type(
+            data,
+            "974767299852498929531610575",
+            MultipartType::FormData,
+        )
+        .unwrap();
+
+        // Poll all the items from the reader
+        let mut reader =
+            MultipartReader::<std::io::Error>::from_data_with_headers(data, &headermap).unwrap();
+        assert_eq!(reader.multipart_type, MultipartType::Related);
         let mut items = vec![];
 
         loop {

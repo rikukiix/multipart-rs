@@ -3,6 +3,8 @@ use std::{
     fmt::{Display, Formatter, Result},
 };
 
+use mediatype::MediaTypeError;
+
 #[derive(Debug)]
 pub enum MultipartError {
     // Missing Content-Type header
@@ -10,6 +12,9 @@ pub enum MultipartError {
 
     // Invalid boundary
     InvalidBoundary,
+
+    // Content-Type parsing error
+    ContentTypeParsingError(MediaTypeError),
 
     // Invalid Content-Type
     InvalidContentType,
@@ -33,6 +38,9 @@ impl Display for MultipartError {
             MultipartError::InvalidMultipartType => write!(f, "Invalid Multipart type"),
             MultipartError::InvalidItemHeader => write!(f, "Invalid Item header"),
             MultipartError::PollingDataFailed => write!(f, "Failed to poll data from the stream"),
+            MultipartError::ContentTypeParsingError(e) => {
+                write!(f, "Content-Type parsing error: {}", e)
+            }
         }
     }
 }
