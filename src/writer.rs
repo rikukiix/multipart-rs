@@ -30,35 +30,38 @@ impl MultipartWriter {
 
         // write the boundary
         if !self.first {
-            writer.write_all(b"\r\n").unwrap();
+            writer.write_all(b"\r\n")?;
         }
 
         // set first to false
         self.first = false;
 
-        writer.write_all(b"--").unwrap();
-        writer.write_all(self.boundary.as_bytes()).unwrap();
-        writer.write_all(b"\r\n").unwrap();
+        writer.write_all(b"--")?;
+        writer.write_all(self.boundary.as_bytes())?;
+        writer.write_all(b"\r\n")?;
 
         // write the content type
-        writer.write_all(headers.as_bytes()).unwrap();
+        writer.write_all(headers.as_bytes())?;
 
         // write an empty line
-        writer.write_all(b"\r\n").unwrap();
-        writer.write_all(b"\r\n").unwrap();
+        writer.write_all(b"\r\n")?;
+        writer.write_all(b"\r\n")?;
 
         // write the content
         io::copy(&mut reader, &mut writer)
     }
 
-    pub fn finish(&mut self) {
+    pub fn finish(&mut self) -> io::Result<()> {
         // writer for our buffer
         let mut writer = std::io::BufWriter::new(&mut self.data);
 
         // write the final boundary
-        writer.write_all(b"\r\n").unwrap();
-        writer.write_all(b"--").unwrap();
-        writer.write_all(self.boundary.as_bytes()).unwrap();
-        writer.write_all(b"--").unwrap();
+        writer.write_all(b"\r\n")?;
+        writer.write_all(b"--")?;
+        writer.write_all(self.boundary.as_bytes())?;
+        writer.write_all(b"--")?;
+        writer.write_all(b"\r\n")?;
+
+        Ok(())
     }
 }
